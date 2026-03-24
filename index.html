@@ -1,0 +1,991 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>FlowDesk 3D</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet"/>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --black:#080810;--white:#fafaf7;--cream:#f5f2ec;
+  --g:#1a5c3a;--gm:#2d8a5e;--gl:#52c48a;
+  --amb:#e8a030;--red:#e84040;--blue:#3076e8;
+  --glass:rgba(255,255,255,0.05);--gb:rgba(255,255,255,0.1);
+  --font:'Syne',sans-serif;--fserif:'Instrument Serif',serif;
+}
+html,body{width:100%;height:100%;overflow:hidden;background:var(--black);font-family:var(--font);color:var(--white)}
+#cursor{position:fixed;width:10px;height:10px;background:var(--gl);border-radius:50%;pointer-events:none;z-index:9999;transform:translate(-50%,-50%);transition:transform 0.1s;mix-blend-mode:difference}
+#cursor-ring{position:fixed;width:38px;height:38px;border:1px solid rgba(82,196,138,0.45);border-radius:50%;pointer-events:none;z-index:9998;transform:translate(-50%,-50%);transition:left 0.2s,top 0.2s,width 0.2s,height 0.2s}
+body:has(a:hover) #cursor-ring,body:has(button:hover) #cursor-ring,body:has([onclick]:hover) #cursor-ring{width:54px;height:54px;border-color:rgba(82,196,138,0.8)}
+canvas#bg{position:fixed;inset:0;z-index:0;pointer-events:none}
+#app{position:fixed;inset:0;z-index:10;display:flex}
+/* SIDEBAR */
+#sb{width:68px;height:100%;background:rgba(8,8,16,0.75);backdrop-filter:blur(24px);border-right:1px solid var(--gb);display:flex;flex-direction:column;align-items:center;padding:20px 0;gap:6px;transition:width 0.4s cubic-bezier(0.4,0,0.2,1);overflow:hidden;flex-shrink:0;z-index:20;cursor:default}
+#sb:hover{width:210px}
+#sb:hover .nlabel{opacity:1;transform:translateX(0);width:auto}
+.logo{width:38px;height:38px;background:linear-gradient(135deg,var(--g),var(--gl));border-radius:11px;display:flex;align-items:center;justify-content:center;font-size:18px;margin-bottom:14px;flex-shrink:0;animation:lp 3s ease-in-out infinite;box-shadow:0 0 20px rgba(82,196,138,0.25)}
+@keyframes lp{0%,100%{box-shadow:0 0 20px rgba(82,196,138,0.2)}50%{box-shadow:0 0 40px rgba(82,196,138,0.5)}}
+.nb{width:100%;display:flex;align-items:center;gap:13px;padding:11px 15px;border-radius:10px;cursor:pointer;transition:all 0.25s;border:none;background:transparent;color:rgba(255,255,255,0.35);font-family:var(--font);font-size:13px;font-weight:500;white-space:nowrap;position:relative}
+.nb:hover{background:var(--glass);color:var(--white)}
+.nb.active{background:rgba(26,92,58,0.35);color:var(--gl)}
+.nb.active::before{content:'';position:absolute;left:0;top:50%;transform:translateY(-50%);width:3px;height:55%;background:var(--gl);border-radius:0 3px 3px 0;box-shadow:0 0 10px var(--gl)}
+.ni{font-size:17px;flex-shrink:0;width:20px;text-align:center}
+.nlabel{opacity:0;transform:translateX(-8px);transition:all 0.3s;width:0;overflow:hidden}
+.avatar{width:32px;height:32px;border-radius:50%;background:linear-gradient(135deg,var(--g),var(--gl));display:flex;align-items:center;justify-content:center;font-weight:700;font-size:12px;color:var(--black);cursor:pointer;margin-top:auto;box-shadow:0 0 14px rgba(82,196,138,0.3);flex-shrink:0}
+/* MAIN */
+#mn{flex:1;overflow-y:auto;overflow-x:hidden;scrollbar-width:thin;scrollbar-color:rgba(82,196,138,0.25) transparent;position:relative}
+#mn::-webkit-scrollbar{width:3px}
+#mn::-webkit-scrollbar-thumb{background:rgba(82,196,138,0.25);border-radius:3px}
+/* PAGES */
+.pg{display:none;padding:28px 32px 48px;min-height:100%;animation:pgIn 0.45s cubic-bezier(0.4,0,0.2,1) both}
+.pg.active{display:block}
+@keyframes pgIn{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:translateY(0)}}
+/* HERO */
+.hero{margin-bottom:36px;position:relative}
+.eyebrow{font-size:10px;font-weight:700;letter-spacing:.15em;text-transform:uppercase;color:var(--gl);margin-bottom:10px;display:flex;align-items:center;gap:8px}
+.eyebrow::before{content:'';width:20px;height:1px;background:var(--gl)}
+.htitle{font-family:var(--fserif);font-size:clamp(32px,4vw,52px);font-weight:400;line-height:1.1;letter-spacing:-.5px}
+.htitle em{font-style:italic;color:var(--gl)}
+.hsub{font-size:14px;color:rgba(255,255,255,0.4);margin-top:10px;line-height:1.6}
+/* STAT CARDS */
+.sg{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:24px;perspective:900px}
+.sc{background:linear-gradient(135deg,rgba(255,255,255,0.065),rgba(255,255,255,0.025));border:1px solid var(--gb);border-radius:18px;padding:22px;position:relative;overflow:hidden;transform-style:preserve-3d;transition:transform 0.4s cubic-bezier(0.4,0,0.2,1),box-shadow 0.4s;animation:sci 0.7s both;cursor:default}
+.sc:nth-child(1){animation-delay:.08s}.sc:nth-child(2){animation-delay:.16s}.sc:nth-child(3){animation-delay:.24s}.sc:nth-child(4){animation-delay:.32s}
+@keyframes sci{from{opacity:0;transform:translateY(28px) rotateX(12deg)}to{opacity:1;transform:none}}
+.sc:hover{transform:translateY(-7px) rotateX(4deg) rotateY(-2deg);box-shadow:0 28px 55px rgba(0,0,0,0.55),0 0 35px rgba(82,196,138,0.08)}
+.sc::before{content:'';position:absolute;inset:0;background:radial-gradient(circle at 50% 0%,rgba(255,255,255,0.06),transparent 55%);pointer-events:none;border-radius:18px}
+.sc::after{content:'';position:absolute;bottom:0;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,rgba(255,255,255,0.08),transparent)}
+.sglow{position:absolute;top:-20px;right:-20px;width:75px;height:75px;border-radius:50%;filter:blur(28px);opacity:.45}
+.sc:nth-child(1) .sglow{background:var(--gl)}.sc:nth-child(2) .sglow{background:var(--blue)}.sc:nth-child(3) .sglow{background:var(--amb)}.sc:nth-child(4) .sglow{background:var(--red)}
+.si{width:42px;height:42px;border-radius:11px;display:flex;align-items:center;justify-content:center;font-size:18px;margin-bottom:14px;position:relative;z-index:1}
+.si.g{background:rgba(82,196,138,0.12);border:1px solid rgba(82,196,138,0.25)}
+.si.b{background:rgba(48,118,232,0.12);border:1px solid rgba(48,118,232,0.25)}
+.si.a{background:rgba(232,160,48,0.12);border:1px solid rgba(232,160,48,0.25)}
+.si.r{background:rgba(232,64,64,0.1);border:1px solid rgba(232,64,64,0.25)}
+.sv{font-family:var(--fserif);font-size:40px;font-weight:400;line-height:1;letter-spacing:-1.5px;position:relative;z-index:1}
+.slbl{font-size:11px;color:rgba(255,255,255,0.38);margin-top:5px;font-weight:600;letter-spacing:.04em;position:relative;z-index:1}
+.sbadge{position:absolute;top:14px;right:14px;font-size:9px;font-weight:800;padding:2px 7px;border-radius:20px;letter-spacing:.05em}
+.sbadge.up{background:rgba(82,196,138,0.12);color:var(--gl);border:1px solid rgba(82,196,138,0.25)}
+.sbadge.dn{background:rgba(232,64,64,0.1);color:#ff8a8a;border:1px solid rgba(232,64,64,0.2)}
+/* GLASS CARD */
+.gc{background:linear-gradient(135deg,rgba(255,255,255,0.055),rgba(255,255,255,0.018));border:1px solid var(--gb);border-radius:18px;padding:22px;position:relative;overflow:hidden;transition:all 0.35s}
+.gc:hover{border-color:rgba(82,196,138,0.22);box-shadow:0 18px 50px rgba(0,0,0,0.4),0 0 28px rgba(82,196,138,0.04)}
+.gc::before{content:'';position:absolute;top:0;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,rgba(255,255,255,0.12),transparent)}
+.g2{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px}
+.g3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px;margin-bottom:14px}
+.g21{display:grid;grid-template-columns:2fr 1fr;gap:14px;margin-bottom:14px}
+/* CARD HEAD */
+.ch{display:flex;align-items:center;justify-content:space-between;margin-bottom:18px}
+.ct{font-size:13px;font-weight:700;letter-spacing:.04em}
+.cs{font-size:11px;color:rgba(255,255,255,0.3);margin-top:2px}
+.cbadge{font-size:10px;font-weight:700;padding:3px 9px;border-radius:20px;background:rgba(82,196,138,0.1);color:var(--gl);border:1px solid rgba(82,196,138,0.18);letter-spacing:.04em}
+/* PROGRESS */
+.pi{margin-bottom:12px}
+.ph{display:flex;justify-content:space-between;font-size:11px;margin-bottom:5px;color:rgba(255,255,255,0.5)}
+.pt{height:5px;background:rgba(255,255,255,0.06);border-radius:5px;overflow:hidden}
+.pf{height:100%;border-radius:5px;transition:width 1.4s cubic-bezier(0.4,0,0.2,1);position:relative}
+.pf::after{content:'';position:absolute;inset:0;background:linear-gradient(90deg,transparent,rgba(255,255,255,0.35),transparent);animation:sh 2.5s infinite}
+@keyframes sh{0%{transform:translateX(-100%)}100%{transform:translateX(200%)}}
+.pfg{background:linear-gradient(90deg,var(--g),var(--gl))}
+.pfb{background:linear-gradient(90deg,#1a4fa0,var(--blue))}
+.pfa{background:linear-gradient(90deg,#a06020,var(--amb))}
+.pfr{background:linear-gradient(90deg,#a02020,var(--red))}
+/* FOCUS CARD */
+.fc{background:linear-gradient(135deg,rgba(26,92,58,0.35),rgba(82,196,138,0.07));border:1px solid rgba(82,196,138,0.22);border-radius:18px;padding:24px;position:relative;overflow:hidden}
+.fc::before{content:'';position:absolute;top:-40px;right:-40px;width:160px;height:160px;background:radial-gradient(circle,rgba(82,196,138,0.12),transparent 65%);pointer-events:none}
+.fey{font-size:10px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:rgba(82,196,138,.65);margin-bottom:7px}
+.fn{font-family:var(--fserif);font-size:22px;font-style:italic;color:var(--white);line-height:1.25;position:relative;z-index:1}
+.fcat{font-size:11px;color:rgba(82,196,138,.55);margin-top:7px;font-weight:700;letter-spacing:.05em}
+/* QUOTE */
+.qw{border-left:2px solid rgba(82,196,138,.35);padding-left:18px}
+.qt{font-family:var(--fserif);font-size:17px;font-style:italic;line-height:1.55;opacity:.9}
+.qa{font-size:10px;color:rgba(82,196,138,.6);margin-top:9px;font-weight:700;letter-spacing:.07em;text-transform:uppercase}
+/* STREAK */
+.sdg{display:flex;gap:5px;flex-wrap:wrap;margin-top:10px}
+.sd{width:30px;height:30px;border-radius:7px;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;transition:transform 0.2s;letter-spacing:.03em}
+.sd:hover{transform:scale(1.15)}
+.sd.done{background:linear-gradient(135deg,var(--g),var(--gl));box-shadow:0 0 10px rgba(82,196,138,.4)}
+.sd.miss{background:rgba(232,64,64,.12);border:1px solid rgba(232,64,64,.18);color:rgba(232,64,64,.6)}
+.sd.today{background:rgba(232,160,48,.18);border:1px solid rgba(232,160,48,.45);color:var(--amb)}
+.sd.future{background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.06);color:rgba(255,255,255,.2)}
+/* TASK TABLE */
+.tt{width:100%;border-collapse:collapse}
+.tt th{text-align:left;font-size:10px;font-weight:700;color:rgba(255,255,255,.22);text-transform:uppercase;letter-spacing:.1em;padding:10px 14px;border-bottom:1px solid rgba(255,255,255,.05)}
+.tt td{padding:12px 14px;border-bottom:1px solid rgba(255,255,255,.035);vertical-align:middle;font-size:12px}
+.tt tr{transition:background .2s}
+.tt tr:hover td{background:rgba(255,255,255,.022)}
+.tt tr.dr td{opacity:.38}
+.cb{width:20px;height:20px;border-radius:5px;border:1.5px solid rgba(255,255,255,.14);display:inline-flex;align-items:center;justify-content:center;cursor:pointer;transition:all .22s;flex-shrink:0}
+.cb:hover{border-color:var(--gl);box-shadow:0 0 8px rgba(82,196,138,.3)}
+.cb.on{background:linear-gradient(135deg,var(--g),var(--gl));border-color:transparent;box-shadow:0 0 10px rgba(82,196,138,.4);font-size:10px;color:var(--black)}
+.tnc{display:flex;align-items:center;gap:9px;font-weight:500}
+.tnc.st{text-decoration:line-through;color:rgba(255,255,255,.28)}
+/* BADGES */
+.bdg{display:inline-flex;align-items:center;padding:3px 8px;border-radius:20px;font-size:9px;font-weight:800;letter-spacing:.05em;white-space:nowrap}
+.bdg-g{background:rgba(82,196,138,.1);color:var(--gl);border:1px solid rgba(82,196,138,.18)}
+.bdg-b{background:rgba(48,118,232,.1);color:#6aa3ff;border:1px solid rgba(48,118,232,.18)}
+.bdg-a{background:rgba(232,160,48,.1);color:var(--amb);border:1px solid rgba(232,160,48,.18)}
+.bdg-r{background:rgba(232,64,64,.08);color:#ff8a8a;border:1px solid rgba(232,64,64,.18)}
+.bdg-p{background:rgba(138,96,230,.1);color:#b088ff;border:1px solid rgba(138,96,230,.18)}
+.bdg-gr{background:rgba(255,255,255,.07);color:rgba(255,255,255,.5);border:1px solid rgba(255,255,255,.1)}
+/* BUTTONS */
+.btn{display:inline-flex;align-items:center;gap:7px;padding:9px 18px;border-radius:9px;font-family:var(--font);font-size:12px;font-weight:700;cursor:pointer;transition:all .28s;border:none;outline:none;letter-spacing:.03em}
+.btn-g{background:linear-gradient(135deg,var(--g),var(--gl));color:var(--black);box-shadow:0 0 18px rgba(82,196,138,.28)}
+.btn-g:hover{transform:translateY(-2px);box-shadow:0 0 35px rgba(82,196,138,.48),0 8px 28px rgba(0,0,0,.4)}
+.btn-gh{background:rgba(255,255,255,.05);color:rgba(255,255,255,.65);border:1px solid rgba(255,255,255,.09)}
+.btn-gh:hover{background:rgba(255,255,255,.09);color:var(--white)}
+.btn-mk{background:rgba(82,196,138,.1);color:var(--gl);border:1px solid rgba(82,196,138,.2);font-size:10px;padding:4px 10px;border-radius:7px}
+.btn-mk:hover{background:linear-gradient(135deg,var(--g),var(--gl));color:var(--black);transform:translateY(-1px)}
+.btn-de{background:rgba(232,64,64,.08);color:#ff8a8a;border:1px solid rgba(232,64,64,.18);font-size:10px;padding:4px 8px;border-radius:7px}
+.btn-de:hover{background:rgba(232,64,64,.22)}
+.btn-ed{background:rgba(48,118,232,.08);color:#6aa3ff;border:1px solid rgba(48,118,232,.18);font-size:10px;padding:4px 8px;border-radius:7px}
+.btn-ed:hover{background:rgba(48,118,232,.22)}
+/* SEARCH */
+.sw{display:flex;align-items:center;gap:9px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:9px;padding:9px 14px;flex:1;max-width:300px;transition:all .3s}
+.sw:focus-within{border-color:rgba(82,196,138,.38);box-shadow:0 0 0 3px rgba(82,196,138,.07)}
+.sw input{background:transparent;border:none;outline:none;color:var(--white);font-family:var(--font);font-size:12px;flex:1}
+.sw input::placeholder{color:rgba(255,255,255,.22)}
+/* FILTER PILLS */
+.fp{padding:5px 13px;border-radius:20px;font-size:10px;font-weight:700;cursor:pointer;transition:all .22s;border:1px solid rgba(255,255,255,.08);background:transparent;color:rgba(255,255,255,.32);letter-spacing:.04em}
+.fp:hover{border-color:rgba(82,196,138,.28);color:rgba(82,196,138,.75)}
+.fp.active{background:rgba(82,196,138,.1);border-color:rgba(82,196,138,.35);color:var(--gl)}
+/* CHART */
+.cw{position:relative;height:230px}
+.cwl{height:290px}
+/* MODAL */
+.mb{position:fixed;inset:0;background:rgba(0,0,0,.55);backdrop-filter:blur(14px);z-index:1000;display:flex;align-items:center;justify-content:center;opacity:0;pointer-events:none;transition:opacity .3s}
+.mb.open{opacity:1;pointer-events:all}
+.mx{background:linear-gradient(135deg,rgba(18,18,26,.98),rgba(10,10,16,.98));border:1px solid var(--gb);border-radius:22px;padding:32px;width:90%;max-width:440px;box-shadow:0 40px 80px rgba(0,0,0,.6),0 0 0 1px rgba(82,196,138,.08);transform:scale(.9) translateY(28px);transition:all .4s cubic-bezier(.4,0,.2,1)}
+.mb.open .mx{transform:scale(1) translateY(0)}
+.mt{font-family:var(--fserif);font-size:24px;margin-bottom:3px}
+.ms{font-size:11px;color:rgba(255,255,255,.3);margin-bottom:24px}
+.fg{margin-bottom:15px}
+.fl{display:block;font-size:10px;font-weight:700;color:rgba(255,255,255,.35);text-transform:uppercase;letter-spacing:.08em;margin-bottom:7px}
+.fi{width:100%;padding:11px 14px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.09);border-radius:9px;font-family:var(--font);font-size:13px;color:var(--white);outline:none;transition:all .28s}
+.fi:focus{border-color:rgba(82,196,138,.45);box-shadow:0 0 0 3px rgba(82,196,138,.08)}
+.fi option{background:#0e0e1a}
+.mf{display:flex;gap:9px;margin-top:22px}
+/* ACHIEVEMENT */
+.ai{display:flex;align-items:center;gap:12px;padding:10px;border-radius:11px;background:rgba(255,255,255,.025);border:1px solid rgba(255,255,255,.055);margin-bottom:7px;transition:all .28s}
+.ai:hover{background:rgba(255,255,255,.05)}
+.ai.lk{opacity:.3}
+.aico{font-size:20px;width:40px;height:40px;border-radius:9px;background:rgba(255,255,255,.04);display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.an{font-size:12px;font-weight:700}
+.ad{font-size:10px;color:rgba(255,255,255,.3);margin-top:2px}
+/* SUGGESTION */
+.si-w{display:flex;gap:12px;padding:14px;background:rgba(82,196,138,.035);border:1px solid rgba(82,196,138,.09);border-radius:13px;margin-bottom:9px}
+.si-ico{font-size:20px;flex-shrink:0;padding-top:1px}
+.si-t{font-size:12px;font-weight:700;margin-bottom:3px}
+.si-b{font-size:11px;color:rgba(255,255,255,.38);line-height:1.5}
+/* RING */
+.rw{display:flex;flex-direction:column;align-items:center;gap:0}
+/* REPORT ROW */
+.rr{display:flex;align-items:center;justify-content:space-between;padding:11px 0;border-bottom:1px solid rgba(255,255,255,.045)}
+.rr:last-child{border-bottom:none}
+.rn{font-size:12px;font-weight:500;color:rgba(255,255,255,.72)}
+/* SPARKLINE */
+.spk{display:flex;align-items:flex-end;gap:5px;height:55px;margin-top:14px}
+.spc{flex:1;display:flex;flex-direction:column;align-items:center}
+.spb{width:100%;border-radius:3px 3px 0 0;background:linear-gradient(to top,var(--g),var(--gl));min-height:3px;transition:height 1s cubic-bezier(.4,0,.2,1)}
+.spb.tb{background:linear-gradient(to top,#a06020,var(--amb))}
+.spday{font-size:9px;color:rgba(255,255,255,.22);font-weight:700;margin-top:3px}
+.spval{font-size:9px;font-weight:700;color:rgba(255,255,255,.35);margin-bottom:2px}
+/* TOAST */
+#tr{position:fixed;bottom:24px;right:24px;z-index:5000;display:flex;flex-direction:column;gap:9px;pointer-events:none}
+.toast{background:rgba(14,14,22,.97);border:1px solid rgba(255,255,255,.1);border-radius:13px;padding:12px 18px;display:flex;align-items:center;gap:11px;font-size:12px;font-weight:600;transform:translateX(120%);transition:transform .38s cubic-bezier(.4,0,.2,1);box-shadow:0 10px 35px rgba(0,0,0,.5);min-width:240px;pointer-events:all;backdrop-filter:blur(20px)}
+.toast.in{transform:translateX(0)}
+.tico{font-size:16px}
+/* CONFETTI */
+.cf{position:fixed;pointer-events:none;z-index:4999;top:0;border-radius:2px;animation:cff 1.8s ease-in forwards}
+@keyframes cff{0%{opacity:1;transform:translateY(-10px) rotate(0)}100%{opacity:0;transform:translateY(105vh) rotate(900deg)}}
+/* REMINDER */
+.rbanner{background:rgba(232,64,64,.07);border:1px solid rgba(232,64,64,.18);border-radius:13px;padding:13px 18px;display:none;align-items:center;gap:11px;margin-bottom:18px;animation:rb 2.5s ease-in-out infinite}
+@keyframes rb{0%,100%{border-color:rgba(232,64,64,.18)}50%{border-color:rgba(232,64,64,.45)}}
+/* RESPONSIVE */
+@media(max-width:1100px){.sg{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:900px){.g2,.g21{grid-template-columns:1fr}.g3{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:640px){.sg{grid-template-columns:1fr}.g3{grid-template-columns:1fr}#sb{width:52px}#cursor,#cursor-ring{display:none}}
+</style>
+</head>
+<body>
+
+<div id="cursor"></div>
+<div id="cursor-ring"></div>
+<canvas id="bg"></canvas>
+
+<div id="app">
+<nav id="sb">
+  <div class="logo">🌿</div>
+  <div class="nb active" onclick="goto('dashboard')"><span class="ni">⬡</span><span class="nlabel">Dashboard</span></div>
+  <div class="nb" onclick="goto('tasks')"><span class="ni">⊞</span><span class="nlabel">Tasks</span></div>
+  <div class="nb" onclick="goto('analytics')"><span class="ni">◈</span><span class="nlabel">Analytics</span></div>
+  <div class="nb" onclick="goto('reports')"><span class="ni">◎</span><span class="nlabel">Reports</span></div>
+  <div class="avatar" id="avt" onclick="toast('⚙️','Profile settings coming soon!')">U</div>
+</nav>
+
+<main id="mn">
+
+<!-- DASHBOARD -->
+<div class="pg active" id="pg-dashboard">
+  <div class="hero">
+    <div class="eyebrow">Productivity OS</div>
+    <div class="htitle">Good <em id="tod">morning</em>,<br><em id="gn">Friend</em> 👋</div>
+    <div class="hsub" id="dd">Loading…</div>
+  </div>
+
+  <div class="rbanner" id="rb" id="rb">
+    <span style="font-size:17px">🔔</span>
+    <span style="font-size:12px;color:rgba(255,255,255,.65);flex:1"><strong style="color:#ff8a8a" id="pc">0</strong> tasks pending today — keep going!</span>
+    <button class="btn btn-gh" style="font-size:10px;padding:4px 10px" onclick="document.getElementById('rb').style.display='none'">Dismiss</button>
+  </div>
+
+  <div class="sg">
+    <div class="sc"><div class="sglow"></div><div class="sbadge up">ACTIVE</div><div class="si g">📝</div><div class="sv" id="sTotal">0</div><div class="slbl">Total Tasks</div></div>
+    <div class="sc"><div class="sglow"></div><div class="sbadge up">TODAY</div><div class="si b">✔</div><div class="sv" id="sDone">0</div><div class="slbl">Completed</div></div>
+    <div class="sc"><div class="sglow"></div><div class="sbadge dn">PENDING</div><div class="si a">⏳</div><div class="sv" id="sPend">0</div><div class="slbl">Pending</div></div>
+    <div class="sc"><div class="sglow"></div><div class="sbadge up" id="scoreBdg">GOOD</div><div class="si r">⚡</div><div class="sv" id="sScore">0%</div><div class="slbl">Productivity</div></div>
+  </div>
+
+  <div class="g21">
+    <div class="gc">
+      <div class="ch"><div><div class="ct">Today's Progress</div><div class="cs">Live task completion</div></div><div style="font-family:var(--fserif);font-size:30px;font-style:italic;color:var(--gl)" id="ppct">0%</div></div>
+      <div class="pi"><div class="ph"><span>📱 Social Media</span><span id="smP">0%</span></div><div class="pt"><div class="pf pfb" id="smB" style="width:0%"></div></div></div>
+      <div class="pi"><div class="ph"><span>🌐 Website & SEO</span><span id="weP">0%</span></div><div class="pt"><div class="pf pfa" id="weB" style="width:0%"></div></div></div>
+      <div class="pi"><div class="ph"><span>📋 Business / Content</span><span id="bzP">0%</span></div><div class="pt"><div class="pf pfr" id="bzB" style="width:0%"></div></div></div>
+      <div class="pi" style="margin-top:14px">
+        <div class="ph"><span style="font-weight:700;color:var(--white)">Overall</span><span id="ovL">0 / 0</span></div>
+        <div class="pt" style="height:8px"><div class="pf pfg" id="ovB" style="width:0%;height:8px"></div></div>
+      </div>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:14px">
+      <div class="fc" style="flex:1">
+        <div class="fey">🎯 Today's Focus</div>
+        <div class="fn" id="ft">Loading…</div>
+        <div class="fcat" id="fc2">—</div>
+        <div style="margin-top:14px"><button class="btn btn-gh" style="font-size:10px;padding:5px 12px" onclick="goto('tasks')">View all →</button></div>
+      </div>
+      <div class="gc" style="padding:16px">
+        <div class="ch" style="margin-bottom:10px"><div class="ct">🔥 Streak</div><div style="font-family:var(--fserif);font-size:26px;font-style:italic;color:var(--amb)" id="stN">0</div></div>
+        <div class="sdg" id="sdg"></div>
+        <div style="font-size:10px;color:rgba(255,255,255,.3);margin-top:8px" id="stMsg">Start today!</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="g2">
+    <div class="gc">
+      <div class="ch"><div class="ct">💬 Daily Motivation</div><button class="btn btn-gh" style="padding:4px 9px;font-size:10px" onclick="nq()">↻</button></div>
+      <div class="qw"><div class="qt" id="qtext">—</div><div class="qa" id="qauth">—</div></div>
+    </div>
+    <div class="gc">
+      <div class="ch"><div class="ct">📅 This Week</div><div class="cbadge" id="wkbdg">Week</div></div>
+      <div class="spk" id="spk"></div>
+      <div style="display:flex;gap:5px;margin-top:3px" id="spklbl"></div>
+    </div>
+  </div>
+</div>
+
+<!-- TASKS -->
+<div class="pg" id="pg-tasks">
+  <div class="hero"><div class="eyebrow">Manage</div><div class="htitle">Task <em>Board</em></div></div>
+  <div style="display:flex;align-items:center;gap:10px;margin-bottom:18px;flex-wrap:wrap">
+    <div class="sw"><span style="opacity:.4;font-size:13px">🔍</span><input type="text" placeholder="Search tasks…" id="si" oninput="renderTasks()"/></div>
+    <div style="margin-left:auto;display:flex;gap:8px;flex-wrap:wrap">
+      <button class="btn btn-gh" onclick="allDone()">✅ All Done</button>
+      <button class="btn btn-gh" onclick="resetDay()">↻ Reset</button>
+      <button class="btn btn-g" onclick="om('add')">＋ Add Task</button>
+    </div>
+  </div>
+  <div style="display:flex;gap:7px;flex-wrap:wrap;margin-bottom:18px" id="frow">
+    <div class="fp active" onclick="sf('all',this)">All</div>
+    <div class="fp" onclick="sf('pending',this)">⏳ Pending</div>
+    <div class="fp" onclick="sf('done',this)">✅ Done</div>
+    <div class="fp" onclick="sf('Social Media',this)">📱 Social</div>
+    <div class="fp" onclick="sf('Website',this)">🌐 Website</div>
+    <div class="fp" onclick="sf('Business',this)">📋 Business</div>
+    <div class="fp" onclick="sf('Content',this)">✍️ Content</div>
+  </div>
+  <div class="gc" style="padding:0;overflow:hidden">
+    <div style="padding:16px 20px;border-bottom:1px solid rgba(255,255,255,.05);display:flex;align-items:center;gap:10px">
+      <div class="ct">Task List</div><div class="cbadge" id="tcBdg">0</div>
+    </div>
+    <div style="overflow-x:auto">
+      <table class="tt"><thead><tr><th>Task</th><th>Category</th><th>Status</th><th>Date</th><th>Actions</th></tr></thead>
+      <tbody id="ttb"></tbody></table>
+    </div>
+  </div>
+</div>
+
+<!-- ANALYTICS -->
+<div class="pg" id="pg-analytics">
+  <div class="hero"><div class="eyebrow">Insights</div><div class="htitle">Performance <em>Analytics</em></div></div>
+  <div class="sg" style="margin-bottom:18px">
+    <div class="sc"><div class="sglow"></div><div class="si g">🏆</div><div class="sv" id="aBest">—</div><div class="slbl">Best Day</div></div>
+    <div class="sc"><div class="sglow"></div><div class="si b">📅</div><div class="sv" id="aAvg">0%</div><div class="slbl">7-Day Average</div></div>
+    <div class="sc"><div class="sglow"></div><div class="si a">🔥</div><div class="sv" id="aStk">0</div><div class="slbl">Current Streak</div></div>
+    <div class="sc"><div class="sglow"></div><div class="si r">⚡</div><div class="sv" id="aTop">—</div><div class="slbl">Top Category</div></div>
+  </div>
+  <div class="g2">
+    <div class="gc"><div class="ch"><div class="ct">📊 Weekly Completions</div></div><div class="cw cwl"><canvas id="barC"></canvas></div></div>
+    <div class="gc"><div class="ch"><div class="ct">🥧 Category Split</div></div><div class="cw"><canvas id="pieC"></canvas></div></div>
+  </div>
+  <div class="gc" style="margin-bottom:14px"><div class="ch"><div class="ct">📈 Productivity Trend</div><div class="cs">7-day performance</div></div><div class="cw cwl"><canvas id="lineC"></canvas></div></div>
+  <div class="g2">
+    <div class="gc">
+      <div class="ch"><div class="ct">🎯 Score Breakdown</div></div>
+      <div style="display:flex;align-items:center;gap:24px;flex-wrap:wrap">
+        <div class="rw">
+          <svg width="124" height="124" viewBox="0 0 124 124" style="transform:rotate(-90deg)">
+            <circle cx="62" cy="62" r="52" fill="none" stroke="rgba(255,255,255,0.06)" stroke-width="9"/>
+            <circle cx="62" cy="62" r="52" fill="none" stroke="url(#rg)" stroke-width="9" stroke-linecap="round" id="rc" stroke-dasharray="326.7" stroke-dashoffset="326.7"/>
+            <defs><linearGradient id="rg" x1="0%" y1="0%" x2="100%" y2="0%"><stop offset="0%" stop-color="#1a5c3a"/><stop offset="100%" stop-color="#52c48a"/></linearGradient></defs>
+          </svg>
+          <div style="margin-top:-66px;text-align:center;position:relative;z-index:1;margin-bottom:54px">
+            <div style="font-family:var(--fserif);font-size:26px" id="rv">0%</div>
+            <div style="font-size:9px;color:rgba(255,255,255,.3);text-transform:uppercase;letter-spacing:.08em">Today</div>
+          </div>
+        </div>
+        <div style="flex:1;min-width:150px">
+          <div class="pi"><div class="ph"><span>Social Media</span><span id="asm">0%</span></div><div class="pt"><div class="pf pfb" id="asmb" style="width:0%"></div></div></div>
+          <div class="pi"><div class="ph"><span>Website</span><span id="awb">0%</span></div><div class="pt"><div class="pf pfa" id="awbb" style="width:0%"></div></div></div>
+          <div class="pi"><div class="ph"><span>Business/Content</span><span id="abz">0%</span></div><div class="pt"><div class="pf pfr" id="abzb" style="width:0%"></div></div></div>
+        </div>
+      </div>
+    </div>
+    <div class="gc">
+      <div class="ch"><div class="ct">🏅 Achievements</div></div>
+      <div id="ach"></div>
+    </div>
+  </div>
+</div>
+
+<!-- REPORTS -->
+<div class="pg" id="pg-reports">
+  <div class="hero">
+    <div class="eyebrow">Weekly Summary</div>
+    <div class="htitle">Performance <em>Report</em></div>
+    <div style="display:flex;gap:9px;margin-top:14px">
+      <button class="btn btn-g" onclick="expPDF()">📥 Export PDF</button>
+      <button class="btn btn-gh" onclick="shareR()">📤 Share</button>
+    </div>
+  </div>
+  <div class="sg g3" style="grid-template-columns:repeat(3,1fr);margin-bottom:18px">
+    <div class="sc"><div class="sglow"></div><div class="si g">✅</div><div class="sv" id="rDone">0</div><div class="slbl">Completed</div></div>
+    <div class="sc"><div class="sglow"></div><div class="si r">❌</div><div class="sv" id="rMiss">0</div><div class="slbl">Missed</div></div>
+    <div class="sc"><div class="sglow"></div><div class="si a">⚡</div><div class="sv" id="rScore">0%</div><div class="slbl">Score</div></div>
+  </div>
+  <div class="g2">
+    <div class="gc">
+      <div class="ch"><div class="ct">📋 Task Status</div><div class="cs" id="rdrange">This week</div></div>
+      <div id="rtl"></div>
+    </div>
+    <div class="gc">
+      <div class="ch"><div class="ct">💡 Improvement Tips</div></div>
+      <div id="sugg"></div>
+    </div>
+  </div>
+  <div class="gc" style="margin-top:14px"><div class="ch"><div class="ct">📊 Weekly Chart</div></div><div class="cw cwl"><canvas id="repC"></canvas></div></div>
+</div>
+
+</main>
+</div>
+
+<!-- MODALS -->
+<div class="mb" id="mAdd" onclick="cm2(event,'add')">
+  <div class="mx">
+    <div class="mt">Add New Task</div><div class="ms">Create a task to track your work</div>
+    <div class="fg"><label class="fl">Task Name</label><input class="fi" id="nt" placeholder="e.g. Write blog post…" type="text"/></div>
+    <div class="fg"><label class="fl">Category</label>
+      <select class="fi" id="nc">
+        <option value="Social Media">📱 Social Media</option>
+        <option value="Website">🌐 Website & SEO</option>
+        <option value="Business">📋 Business</option>
+        <option value="Content">✍️ Content</option>
+        <option value="Other">📌 Other</option>
+      </select>
+    </div>
+    <div class="mf"><button class="btn btn-g" onclick="addTask()" style="flex:1">＋ Add Task</button><button class="btn btn-gh" onclick="cm('add')">Cancel</button></div>
+  </div>
+</div>
+
+<div class="mb" id="mEdit" onclick="cm2(event,'edit')">
+  <div class="mx">
+    <div class="mt">Edit Task</div><div class="ms">Update task details</div>
+    <input type="hidden" id="eid"/>
+    <div class="fg"><label class="fl">Task Name</label><input class="fi" id="en" type="text"/></div>
+    <div class="fg"><label class="fl">Category</label>
+      <select class="fi" id="ec">
+        <option value="Social Media">📱 Social Media</option>
+        <option value="Website">🌐 Website & SEO</option>
+        <option value="Business">📋 Business</option>
+        <option value="Content">✍️ Content</option>
+        <option value="Other">📌 Other</option>
+      </select>
+    </div>
+    <div class="mf"><button class="btn btn-g" onclick="saveEdit()" style="flex:1">💾 Save Changes</button><button class="btn btn-gh" onclick="cm('edit')">Cancel</button></div>
+  </div>
+</div>
+
+<div id="tr"></div>
+
+<button onclick="om('add')" style="position:fixed;bottom:26px;right:26px;width:52px;height:52px;border-radius:50%;background:linear-gradient(135deg,var(--g),var(--gl));border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:22px;color:var(--black);box-shadow:0 0 25px rgba(82,196,138,.4),0 8px 24px rgba(0,0,0,.4);z-index:200;font-weight:700;transition:all .3s" onmouseover="this.style.transform='scale(1.12) rotate(45deg)'" onmouseout="this.style.transform=''" title="Add Task">＋</button>
+
+<script>
+// ============ THREE.JS 3D BACKGROUND ============
+(function(){
+  const canvas = document.getElementById('bg');
+  const renderer = new THREE.WebGLRenderer({canvas, antialias:true, alpha:true});
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio,2));
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  const scene = new THREE.Scene();
+  const camera = new THREE.PerspectiveCamera(60, window.innerWidth/window.innerHeight, 0.1, 1000);
+  camera.position.z = 30;
+
+  // PARTICLES
+  const pGeo = new THREE.BufferGeometry();
+  const pCount = 1800;
+  const positions = new Float32Array(pCount*3);
+  const sizes = new Float32Array(pCount);
+  for(let i=0;i<pCount;i++){
+    positions[i*3]=(Math.random()-0.5)*120;
+    positions[i*3+1]=(Math.random()-0.5)*120;
+    positions[i*3+2]=(Math.random()-0.5)*60;
+    sizes[i]=Math.random()*2+0.5;
+  }
+  pGeo.setAttribute('position',new THREE.BufferAttribute(positions,3));
+  pGeo.setAttribute('size',new THREE.BufferAttribute(sizes,1));
+  const pMat = new THREE.PointsMaterial({color:0x52c48a,size:0.18,transparent:true,opacity:0.35,sizeAttenuation:true});
+  const particles = new THREE.Points(pGeo,pMat);
+  scene.add(particles);
+
+  // FLOATING GEOMETRIES
+  const meshes = [];
+  const geos = [
+    new THREE.IcosahedronGeometry(3,0),
+    new THREE.OctahedronGeometry(2.5,0),
+    new THREE.TetrahedronGeometry(2.8,0),
+    new THREE.IcosahedronGeometry(2,0),
+    new THREE.OctahedronGeometry(1.8,0),
+    new THREE.TetrahedronGeometry(2.2,0),
+  ];
+  const positions3D = [
+    [-18,8,-10],[ 20,-5,-15],[ 8,14,-8],
+    [-12,-10,-12],[16,10,-18],[-5,-14,-6]
+  ];
+  geos.forEach((geo,i)=>{
+    const mat = new THREE.MeshPhongMaterial({
+      color: i%3===0 ? 0x1a5c3a : i%3===1 ? 0x2d8a5e : 0x52c48a,
+      wireframe: true,
+      transparent: true,
+      opacity: 0.18 + Math.random()*0.12
+    });
+    const mesh = new THREE.Mesh(geo, mat);
+    const p = positions3D[i];
+    mesh.position.set(p[0],p[1],p[2]);
+    mesh._ry = (Math.random()-0.5)*0.015;
+    mesh._rx = (Math.random()-0.5)*0.008;
+    mesh._floatSpeed = 0.4+Math.random()*0.6;
+    mesh._floatAmp = 0.8+Math.random()*1.2;
+    mesh._floatOffset = Math.random()*Math.PI*2;
+    meshes.push(mesh);
+    scene.add(mesh);
+  });
+
+  // TORUS KNOT
+  const tkGeo = new THREE.TorusKnotGeometry(6,0.8,120,16);
+  const tkMat = new THREE.MeshPhongMaterial({color:0x2d8a5e,wireframe:true,transparent:true,opacity:0.07});
+  const tk = new THREE.Mesh(tkGeo,tkMat);
+  tk.position.set(0,0,-25);
+  scene.add(tk);
+
+  // GRID PLANE
+  const gridHelper = new THREE.GridHelper(200,40,0x1a5c3a,0x0d2e1e);
+  gridHelper.position.y = -25;
+  gridHelper.material.transparent = true;
+  gridHelper.material.opacity = 0.25;
+  scene.add(gridHelper);
+
+  // LIGHTS
+  const aLight = new THREE.AmbientLight(0x1a5c3a,0.6);
+  scene.add(aLight);
+  const dLight = new THREE.DirectionalLight(0x52c48a,0.8);
+  dLight.position.set(10,20,10);
+  scene.add(dLight);
+  const pLight = new THREE.PointLight(0x52c48a,1,60);
+  pLight.position.set(-15,10,5);
+  scene.add(pLight);
+
+  // MOUSE
+  let mx=0,my=0;
+  window.addEventListener('mousemove',e=>{mx=(e.clientX/window.innerWidth-0.5)*2;my=-(e.clientY/window.innerHeight-0.5)*2;});
+  window.addEventListener('resize',()=>{
+    renderer.setSize(window.innerWidth,window.innerHeight);
+    camera.aspect=window.innerWidth/window.innerHeight;
+    camera.updateProjectionMatrix();
+  });
+
+  let t=0;
+  function animate(){
+    requestAnimationFrame(animate);
+    t+=0.008;
+    particles.rotation.y = t*0.04;
+    particles.rotation.x = t*0.02;
+    tk.rotation.x = t*0.12;
+    tk.rotation.y = t*0.08;
+    gridHelper.position.z = (t*2)%5;
+    meshes.forEach(m=>{
+      m.rotation.y += m._ry;
+      m.rotation.x += m._rx;
+      m.position.y += Math.sin(t*m._floatSpeed+m._floatOffset)*0.008*m._floatAmp;
+    });
+    camera.position.x += (mx*3 - camera.position.x)*0.03;
+    camera.position.y += (my*2 - camera.position.y)*0.03;
+    camera.lookAt(0,0,0);
+    pLight.position.x = Math.sin(t*0.5)*20;
+    pLight.position.y = Math.cos(t*0.3)*15;
+    renderer.render(scene,camera);
+  }
+  animate();
+})();
+
+// ============ CURSOR ============
+const cur=document.getElementById('cursor'), ring=document.getElementById('cursor-ring');
+let rx=0,ry=0;
+document.addEventListener('mousemove',e=>{
+  cur.style.left=e.clientX+'px';cur.style.top=e.clientY+'px';
+  rx+=(e.clientX-rx)*0.12;ry+=(e.clientY-ry)*0.12;
+  ring.style.left=rx+'px';ring.style.top=ry+'px';
+});
+
+// ============ DATA ============
+const DEFAULTS=[
+  {name:'Website SEO',cat:'Website'},
+  {name:'Product Add',cat:'Website'},
+  {name:'Service Page Improvement',cat:'Website'},
+  {name:'TDS & COA Edit',cat:'Business'},
+  {name:'Instagram Optimization',cat:'Social Media'},
+  {name:'Instagram Post',cat:'Social Media'},
+  {name:'LinkedIn Optimization',cat:'Social Media'},
+  {name:'LinkedIn Post',cat:'Social Media'},
+  {name:'LinkedIn Connection (50 daily)',cat:'Social Media'},
+  {name:'Daily Post',cat:'Content'}
+];
+const QUOTES=[
+  {t:"The secret of getting ahead is getting started.",a:"Mark Twain"},
+  {t:"Don't watch the clock — do what it does. Keep going.",a:"Sam Levenson"},
+  {t:"Success is the sum of small efforts, repeated day in and day out.",a:"Robert Collier"},
+  {t:"Focus on being productive instead of busy.",a:"Tim Ferriss"},
+  {t:"Action is the foundational key to all success.",a:"Pablo Picasso"},
+  {t:"Work hard in silence, let success make the noise.",a:"Frank Ocean"},
+  {t:"Productivity is never an accident. It is always the result of excellence.",a:"Paul J. Meyer"},
+  {t:"Your future is created by what you do today, not tomorrow.",a:"Robert Kiyosaki"},
+  {t:"Discipline is the bridge between goals and accomplishment.",a:"Jim Rohn"},
+  {t:"It does not matter how slowly you go, as long as you do not stop.",a:"Confucius"}
+];
+const CATBDG={'Social Media':'bdg-b','Website':'bdg-p','Business':'bdg-a','Content':'bdg-g','Other':'bdg-gr'};
+
+let S={tasks:[],qi:0,streak:0,name:'Friend',filter:'all'};
+
+function tkey(){return new Date().toISOString().split('T')[0];}
+function load(){const s=localStorage.getItem('fd3d');if(s){try{const p=JSON.parse(s);S={...S,...p};}catch(e){}}if(!S.tasks||S.tasks.length===0)seed();}
+function save(){localStorage.setItem('fd3d',JSON.stringify(S));}
+function seed(){S.tasks=DEFAULTS.map((d,i)=>({id:'t'+i,name:d.name,cat:d.cat,done:null}));}
+
+// ============ NAVIGATION ============
+function goto(page){
+  document.querySelectorAll('.pg').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.nb').forEach(n=>n.classList.remove('active'));
+  document.getElementById('pg-'+page).classList.add('active');
+  document.querySelectorAll('.nb').forEach(n=>{if(n.getAttribute('onclick')&&n.getAttribute('onclick').includes("'"+page+"'"))n.classList.add('active');});
+  if(page==='tasks')setTimeout(renderTasks,50);
+  if(page==='analytics'){updAnalytics();updCharts();}
+  if(page==='reports')updReports();
+}
+
+// ============ STATS ============
+function updStats(){
+  const today=tkey();
+  const done=S.tasks.filter(t=>t.done===today).length;
+  const total=S.tasks.length;
+  const pend=total-done;
+  const score=total>0?Math.round(done/total*100):0;
+  document.getElementById('sTotal').textContent=total;
+  document.getElementById('sDone').textContent=done;
+  document.getElementById('sPend').textContent=pend;
+  document.getElementById('sScore').textContent=score+'%';
+  document.getElementById('ppct').textContent=score+'%';
+  document.getElementById('ovL').textContent=done+' / '+total;
+  document.getElementById('ovB').style.width=score+'%';
+  const sb=document.getElementById('scoreBdg');
+  sb.textContent=score>=80?'EXCELLENT':score>=60?'GOOD':score>=40?'FAIR':'LOW';
+  // category progress
+  const cats={sm:{d:0,t:0},we:{d:0,t:0},bz:{d:0,t:0}};
+  S.tasks.forEach(t=>{const dk=t.done===today;if(t.cat==='Social Media'){cats.sm.t++;if(dk)cats.sm.d++;}else if(t.cat==='Website'){cats.we.t++;if(dk)cats.we.d++;}else{cats.bz.t++;if(dk)cats.bz.d++;}});
+  const p=(a,b)=>b>0?Math.round(a/b*100):0;
+  const smp=p(cats.sm.d,cats.sm.t),wep=p(cats.we.d,cats.we.t),bzp=p(cats.bz.d,cats.bz.t);
+  document.getElementById('smP').textContent=smp+'%';document.getElementById('smB').style.width=smp+'%';
+  document.getElementById('weP').textContent=wep+'%';document.getElementById('weB').style.width=wep+'%';
+  document.getElementById('bzP').textContent=bzp+'%';document.getElementById('bzB').style.width=bzp+'%';
+  const focus=S.tasks.find(t=>t.done!==today)||S.tasks[0];
+  if(focus){document.getElementById('ft').textContent=focus.name;document.getElementById('fc2').textContent=focus.cat;}
+  const pc=document.getElementById('pc');if(pc)pc.textContent=pend;
+  const rb=document.getElementById('rb');
+  if(rb)rb.style.display=pend>0?'flex':'none';
+  updStreak();updStreakGrid();updQuote();updWeekSpark();save();
+}
+
+// ============ STREAK ============
+function updStreak(){
+  let s=0,d=new Date();
+  for(let i=0;i<365;i++){
+    const k=d.toISOString().split('T')[0];
+    const dk=S.tasks.filter(t=>t.done===k).length;
+    const tt=S.tasks.length;
+    if(dk>=Math.ceil(tt*0.5))s++;
+    else if(i>0)break;
+    d.setDate(d.getDate()-1);
+  }
+  S.streak=s;
+  const el=document.getElementById('stN');if(el)el.textContent=s;
+  const msg=document.getElementById('stMsg');
+  if(msg)msg.textContent=s===0?'Start your streak today!':s<3?s+' day streak! Keep going!':'🔥 '+s+' day streak! Amazing!';
+}
+
+function updStreakGrid(){
+  const g=document.getElementById('sdg');if(!g)return;
+  g.innerHTML='';const today=new Date();const days=['Su','Mo','Tu','We','Th','Fr','Sa'];
+  for(let i=13;i>=0;i--){
+    const d=new Date(today);d.setDate(d.getDate()-i);
+    const k=d.toISOString().split('T')[0];
+    const done=S.tasks.filter(t=>t.done===k).length;
+    const total=S.tasks.length;
+    const el=document.createElement('div');el.className='sd';
+    const lbl=days[d.getDay()];el.textContent=lbl;
+    if(i===0)el.classList.add('today');
+    else if(done>=Math.ceil(total*0.5))el.classList.add('done');
+    else if(i>0)el.classList.add('miss');
+    else el.classList.add('future');
+    g.appendChild(el);
+  }
+}
+
+// ============ QUOTE ============
+function updQuote(){
+  const q=QUOTES[S.qi%QUOTES.length];
+  const qt=document.getElementById('qtext');const qa=document.getElementById('qauth');
+  if(qt)qt.textContent=q.t;if(qa)qa.textContent='— '+q.a;
+}
+function nq(){S.qi=(S.qi+1)%QUOTES.length;updQuote();}
+
+// ============ WEEK SPARKLINE ============
+function updWeekSpark(){
+  const spk=document.getElementById('spk');const lbl=document.getElementById('spklbl');
+  if(!spk)return;
+  spk.innerHTML='';if(lbl)lbl.innerHTML='';
+  const days=['Mo','Tu','We','Th','Fr','Sa','Su'];
+  const today=new Date();const total=S.tasks.length||1;
+  for(let i=6;i>=0;i--){
+    const d=new Date(today);d.setDate(d.getDate()-i);
+    const k=d.toISOString().split('T')[0];
+    const done=S.tasks.filter(t=>t.done===k).length;
+    const pct=Math.max(4,Math.round(done/total*100));
+    const isToday=i===0;
+    const col=document.createElement('div');col.className='spc';
+    col.innerHTML=`<span class="spval">${done}</span><div class="spb${isToday?' tb':''}" style="height:${Math.max(4,pct*0.5)}px"></div>`;
+    spk.appendChild(col);
+    if(lbl){const d2=document.createElement('span');d2.className='spday';d2.style.flex='1';d2.style.textAlign='center';d2.textContent=days[(d.getDay()+6)%7];if(isToday){d2.style.color='var(--amb)';}lbl.appendChild(d2);}
+  }
+}
+
+// ============ TASKS RENDERING ============
+function renderTasks(){
+  const today=tkey();
+  const q=(document.getElementById('si')||{value:''}).value.toLowerCase();
+  const f=S.filter||'all';
+  const tasks=S.tasks.filter(t=>{
+    const ms=t.name.toLowerCase().includes(q)||t.cat.toLowerCase().includes(q);
+    if(f==='pending')return t.done!==today&&ms;
+    if(f==='done')return t.done===today&&ms;
+    if(f!=='all')return t.cat===f&&ms;
+    return ms;
+  });
+  const tb=document.getElementById('ttb');tb.innerHTML='';
+  const bd=document.getElementById('tcBdg');if(bd)bd.textContent=tasks.length+' tasks';
+  if(tasks.length===0){
+    tb.innerHTML='<tr><td colspan="5" style="text-align:center;padding:40px;color:rgba(255,255,255,.2);font-size:13px">No tasks found</td></tr>';
+    return;
+  }
+  tasks.forEach(t=>{
+    const done=t.done===today;
+    const tr=document.createElement('tr');
+    tr.className=done?'dr':'';
+    tr.innerHTML=`
+      <td><div class="tnc${done?' st':''}"><div class="cb${done?' on':''}" onclick="toggle('${t.id}')">${done?'✓':''}</div>${t.name}</div></td>
+      <td><span class="bdg ${CATBDG[t.cat]||'bdg-gr'}">${t.cat}</span></td>
+      <td><span class="bdg ${done?'bdg-g':'bdg-a'}">${done?'✅ Done':'⏳ Pending'}</span></td>
+      <td style="color:rgba(255,255,255,.3)">${done?t.done:today}</td>
+      <td><div style="display:flex;gap:5px;flex-wrap:wrap">
+        ${!done?`<button class="btn btn-mk" onclick="toggle('${t.id}')">Mark Done</button>`:'<span style="font-size:10px;color:rgba(255,255,255,.3)">Done ✓</span>'}
+        <button class="btn btn-ed" onclick="editTask('${t.id}')">✏️</button>
+        <button class="btn btn-de" onclick="delTask('${t.id}')">🗑️</button>
+      </div></td>`;
+    tb.appendChild(tr);
+  });
+}
+
+// ============ TASK CRUD ============
+function toggle(id){
+  const today=tkey();
+  const t=S.tasks.find(x=>x.id===id);if(!t)return;
+  const was=t.done===today;
+  t.done=was?null:today;
+  if(!was)confetti();
+  updStats();renderTasks();updAnalytics();
+  toast(was?'↩️':'🎉',was?'"'+t.name+'" undone':'"'+t.name+'" completed!');
+}
+function addTask(){
+  const name=document.getElementById('nt').value.trim();
+  const cat=document.getElementById('nc').value;
+  if(!name){toast('⚠️','Enter a task name');return;}
+  S.tasks.push({id:'t'+Date.now(),name,cat,done:null});
+  cm('add');document.getElementById('nt').value='';
+  updStats();renderTasks();updAnalytics();toast('✅','Task "'+name+'" added!');
+}
+function editTask(id){
+  const t=S.tasks.find(x=>x.id===id);if(!t)return;
+  document.getElementById('eid').value=id;
+  document.getElementById('en').value=t.name;
+  document.getElementById('ec').value=t.cat;
+  om('edit');
+}
+function saveEdit(){
+  const id=document.getElementById('eid').value;
+  const name=document.getElementById('en').value.trim();
+  const cat=document.getElementById('ec').value;
+  if(!name){toast('⚠️','Name required');return;}
+  const t=S.tasks.find(x=>x.id===id);if(t){t.name=name;t.cat=cat;}
+  cm('edit');updStats();renderTasks();updAnalytics();toast('✏️','Task updated!');
+}
+function delTask(id){
+  const t=S.tasks.find(x=>x.id===id);if(!t)return;
+  S.tasks=S.tasks.filter(x=>x.id!==id);
+  updStats();renderTasks();updAnalytics();toast('🗑️','"'+t.name+'" deleted');
+}
+function allDone(){
+  const today=tkey();S.tasks.forEach(t=>{if(t.done!==today)t.done=today;});
+  confetti();updStats();renderTasks();toast('🎉','All tasks completed!');
+}
+function resetDay(){
+  const today=tkey();S.tasks.forEach(t=>{if(t.done===today)t.done=null;});
+  updStats();renderTasks();toast('↻','Day reset!');
+}
+function sf(f,el){
+  S.filter=f;
+  document.querySelectorAll('.fp').forEach(p=>p.classList.remove('active'));
+  el.classList.add('active');renderTasks();
+}
+
+// ============ MODALS ============
+function om(n){document.getElementById('m'+n.charAt(0).toUpperCase()+n.slice(1)).classList.add('open');}
+function cm(n){document.getElementById('m'+n.charAt(0).toUpperCase()+n.slice(1)).classList.remove('open');}
+function cm2(e,n){if(e.target.classList.contains('mb'))cm(n);}
+
+// ============ ANALYTICS ============
+function updAnalytics(){
+  const today=tkey();
+  const done=S.tasks.filter(t=>t.done===today).length;
+  const total=S.tasks.length;
+  const score=total>0?Math.round(done/total*100):0;
+  const rv=document.getElementById('rv');if(rv)rv.textContent=score+'%';
+  const circ=2*Math.PI*52;
+  const rc=document.getElementById('rc');
+  if(rc){rc.style.strokeDasharray=circ;rc.style.strokeDashoffset=circ-(score/100)*circ;}
+  const cats={sm:{d:0,t:0},we:{d:0,t:0},bz:{d:0,t:0}};
+  S.tasks.forEach(t=>{const dk=t.done===today;if(t.cat==='Social Media'){cats.sm.t++;if(dk)cats.sm.d++;}else if(t.cat==='Website'){cats.we.t++;if(dk)cats.we.d++;}else{cats.bz.t++;if(dk)cats.bz.d++;}});
+  const p=(a,b)=>b>0?Math.round(a/b*100):0;
+  const sp=p(cats.sm.d,cats.sm.t),wp=p(cats.we.d,cats.we.t),bp=p(cats.bz.d,cats.bz.t);
+  ['asm','awb','abz'].forEach((id,i)=>{const el=document.getElementById(id);if(el)el.textContent=[sp,wp,bp][i]+'%';});
+  ['asmb','awbb','abzb'].forEach((id,i)=>{const el=document.getElementById(id);if(el)el.style.width=[sp,wp,bp][i]+'%';});
+  const aStk=document.getElementById('aStk');if(aStk)aStk.textContent=S.streak||0;
+  const aAvg=document.getElementById('aAvg');if(aAvg)aAvg.textContent=score+'%';
+  const topArr=[['Social Media',sp],['Website',wp],['Business/Content',bp]].sort((a,b)=>b[1]-a[1]);
+  const aTop=document.getElementById('aTop');if(aTop)aTop.textContent=topArr[0][1]>0?topArr[0][0]:'—';
+  const days2=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+  const aBest=document.getElementById('aBest');if(aBest)aBest.textContent=days2[new Date().getDay()];
+  renderAch();
+}
+
+function renderAch(){
+  const el=document.getElementById('ach');if(!el)return;
+  const today=tkey();const done=S.tasks.filter(t=>t.done===today).length;const total=S.tasks.length;const score=total>0?Math.round(done/total*100):0;
+  const achs=[
+    {ic:'🌅',n:'Early Bird',d:'Complete 3+ tasks',ok:done>=3},
+    {ic:'🏆',n:'Perfect Day',d:'Complete all tasks',ok:done===total&&total>0},
+    {ic:'🔥',n:'On Fire',d:'3+ day streak',ok:(S.streak||0)>=3},
+    {ic:'⚡',n:'Speed Runner',d:'80%+ productivity',ok:score>=80},
+    {ic:'💎',n:'Elite',d:'100% score achieved',ok:score===100},
+    {ic:'🌱',n:'Getting Started',d:'Add your first task',ok:total>0}
+  ];
+  el.innerHTML=achs.map(a=>`<div class="ai${a.ok?'':' lk'}"><div class="aico">${a.ic}</div><div><div class="an">${a.n}</div><div class="ad">${a.d}</div></div><span class="bdg ${a.ok?'bdg-g':'bdg-gr'}">${a.ok?'✓ Unlocked':'Locked'}</span></div>`).join('');
+}
+
+// ============ REPORTS ============
+function updReports(){
+  const today=tkey();
+  const done=S.tasks.filter(t=>t.done===today).length;
+  const total=S.tasks.length;const missed=total-done;
+  const score=total>0?Math.round(done/total*100):0;
+  const rd=document.getElementById('rDone');if(rd)rd.textContent=done;
+  const rm=document.getElementById('rMiss');if(rm)rm.textContent=missed;
+  const rs=document.getElementById('rScore');if(rs)rs.textContent=score+'%';
+  const rtl=document.getElementById('rtl');
+  if(rtl)rtl.innerHTML=S.tasks.map(t=>`<div class="rr"><span class="rn">${t.name}</span><span class="${t.done===today?'r-done':'r-miss'}" style="font-size:10px;font-weight:800">${t.done===today?'✅ Completed':'❌ Missed'}</span></div>`).join('');
+  const sugg=document.getElementById('sugg');if(!sugg)return;
+  const tips=[];
+  if(missed>0)tips.push({ic:'⏰',t:'Time Management',b:`${missed} tasks pending. Try 25-min Pomodoro focus blocks.`});
+  if(score<50)tips.push({ic:'📈',t:'Boost Momentum',b:'Start with your easiest task to build momentum.'});
+  if((S.streak||0)===0)tips.push({ic:'🔥',t:'Build a Streak',b:'Complete 50%+ tasks daily to start a consistency streak.'});
+  if(score>=80)tips.push({ic:'🏆',t:'Outstanding!',b:`${score}% score! Consider adding stretch goals.`});
+  tips.push({ic:'💡',t:'Pro Tip',b:'Batch similar tasks. Complete all social media in one focused session.'});
+  sugg.innerHTML=tips.map(s=>`<div class="si-w"><span class="si-ico">${s.ic}</span><div><div class="si-t">${s.t}</div><div class="si-b">${s.b}</div></div></div>`).join('');
+}
+function expPDF(){toast('📥','Preparing PDF…');setTimeout(()=>window.print(),400);}
+function shareR(){
+  const today=tkey();const done=S.tasks.filter(t=>t.done===today).length;const total=S.tasks.length;
+  const text=`📊 FlowDesk Report\n✅ ${done}/${total} tasks\n⚡ Score: ${Math.round(done/total*100)}%\n🔥 Streak: ${S.streak} days`;
+  if(navigator.clipboard)navigator.clipboard.writeText(text);
+  toast('📋','Report copied to clipboard!');
+}
+
+// ============ CHARTS ============
+let charts={};
+function getWeekData(){
+  const labels=[],data=[],today=new Date();const total=S.tasks.length||1;
+  for(let i=6;i>=0;i--){
+    const d=new Date(today);d.setDate(d.getDate()-i);
+    const k=d.toISOString().split('T')[0];
+    const done=S.tasks.filter(t=>t.done===k).length;
+    labels.push(d.toLocaleDateString('en-US',{weekday:'short'}));
+    data.push(done);
+  }
+  return{labels,data,total};
+}
+const CO={backgroundColor:'rgba(8,8,16,0.0)',titleColor:'rgba(255,255,255,0.9)',bodyColor:'rgba(255,255,255,0.6)',borderColor:'rgba(255,255,255,0.12)',borderWidth:1,padding:10};
+const gridC='rgba(255,255,255,0.06)',tickC='rgba(255,255,255,0.35)';
+
+function initCharts(){
+  const {labels,data,total}=getWeekData();
+  const scores=data.map(d=>Math.round(d/total*100));
+  const cats=['Social Media','Website','Business','Content','Other'];
+  const catData=cats.map(c=>S.tasks.filter(t=>t.cat===c).length);
+
+  const barCtx=document.getElementById('barC');
+  if(barCtx){
+    charts.bar=new Chart(barCtx,{type:'bar',
+      data:{labels,datasets:[{label:'Tasks Completed',data,backgroundColor:data.map((_,i)=>i===6?'rgba(82,196,138,0.85)':'rgba(82,196,138,0.35)'),borderRadius:6,borderSkipped:false}]},
+      options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{...CO}},scales:{x:{grid:{color:gridC},ticks:{color:tickC}},y:{grid:{color:gridC},ticks:{color:tickC,stepSize:1},beginAtZero:true}}}
+    });
+  }
+  const pieCtx=document.getElementById('pieC');
+  if(pieCtx){
+    charts.pie=new Chart(pieCtx,{type:'doughnut',
+      data:{labels:cats,datasets:[{data:catData,backgroundColor:['rgba(48,118,232,0.75)','rgba(138,96,230,0.75)','rgba(232,160,48,0.75)','rgba(82,196,138,0.75)','rgba(107,114,128,0.75)'],borderWidth:2,borderColor:'rgba(255,255,255,0.08)',hoverOffset:6}]},
+      options:{responsive:true,maintainAspectRatio:false,cutout:'68%',plugins:{legend:{position:'bottom',labels:{color:tickC,usePointStyle:true,pointStyleWidth:7,padding:14,font:{size:11}}},tooltip:{...CO}}}
+    });
+  }
+  const lineCtx=document.getElementById('lineC');
+  if(lineCtx){
+    charts.line=new Chart(lineCtx,{type:'line',
+      data:{labels,datasets:[{label:'Productivity %',data:scores,borderColor:'rgba(82,196,138,0.9)',backgroundColor:'rgba(82,196,138,0.07)',borderWidth:2,tension:0.45,fill:true,pointBackgroundColor:'rgba(82,196,138,1)',pointRadius:4,pointHoverRadius:7}]},
+      options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{...CO,callbacks:{label:c=>` ${c.parsed.y}%`}}},scales:{x:{grid:{color:gridC},ticks:{color:tickC}},y:{grid:{color:gridC},ticks:{color:tickC,callback:v=>v+'%'},beginAtZero:true,max:100}}}
+    });
+  }
+  const repCtx=document.getElementById('repC');
+  if(repCtx){
+    charts.rep=new Chart(repCtx,{type:'bar',
+      data:{labels,datasets:[
+        {label:'Completed',data,backgroundColor:'rgba(82,196,138,0.65)',borderRadius:5,borderSkipped:false},
+        {label:'Total',data:data.map(()=>S.tasks.length),backgroundColor:'rgba(255,255,255,0.05)',borderRadius:5,borderSkipped:false}
+      ]},
+      options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{labels:{color:tickC,usePointStyle:true,pointStyleWidth:7,padding:14,font:{size:11}}}},scales:{x:{grid:{color:gridC},ticks:{color:tickC}},y:{grid:{color:gridC},ticks:{color:tickC,stepSize:1},beginAtZero:true}}}
+    });
+  }
+}
+
+function updCharts(){
+  const {labels,data,total}=getWeekData();
+  const scores=data.map(d=>Math.round(d/total*100));
+  const cats=['Social Media','Website','Business','Content','Other'];
+  if(charts.bar){charts.bar.data.labels=labels;charts.bar.data.datasets[0].data=data;charts.bar.update();}
+  if(charts.line){charts.line.data.labels=labels;charts.line.data.datasets[0].data=scores;charts.line.update();}
+  if(charts.pie){charts.pie.data.datasets[0].data=cats.map(c=>S.tasks.filter(t=>t.cat===c).length);charts.pie.update();}
+  if(charts.rep){charts.rep.data.labels=labels;charts.rep.data.datasets[0].data=data;charts.rep.data.datasets[1].data=data.map(()=>S.tasks.length);charts.rep.update();}
+}
+
+// ============ TOAST ============
+function toast(icon,msg){
+  const c=document.getElementById('tr');
+  const t=document.createElement('div');
+  t.className='toast';
+  t.innerHTML=`<span class="tico">${icon}</span><span>${msg}</span>`;
+  c.appendChild(t);
+  setTimeout(()=>t.classList.add('in'),40);
+  setTimeout(()=>{t.classList.remove('in');setTimeout(()=>t.remove(),400);},2800);
+}
+
+// ============ CONFETTI ============
+function confetti(){
+  const cols=['#52c48a','#1a5c3a','#e8a030','#3076e8','#e84040','#b088ff','#ff8080'];
+  for(let i=0;i<35;i++){
+    const el=document.createElement('div');el.className='cf';
+    el.style.cssText=`left:${Math.random()*100}vw;background:${cols[Math.floor(Math.random()*cols.length)]};width:${5+Math.random()*9}px;height:${5+Math.random()*9}px;animation-duration:${1.2+Math.random()*0.9}s;animation-delay:${Math.random()*0.4}s`;
+    document.body.appendChild(el);setTimeout(()=>el.remove(),2500);
+  }
+}
+
+// ============ GREETING ============
+function setGreeting(){
+  const h=new Date().getHours();
+  const g=document.getElementById('tod');if(g)g.textContent=h<12?'morning':h<17?'afternoon':'evening';
+  const dd=document.getElementById('dd');if(dd)dd.textContent=new Date().toLocaleDateString('en-US',{weekday:'long',year:'numeric',month:'long',day:'numeric'});
+}
+
+// ============ KEYBOARD ============
+document.addEventListener('keydown',e=>{
+  if(e.key==='Escape'){cm('add');cm('edit');}
+  if(e.ctrlKey&&e.key==='n'){e.preventDefault();om('add');}
+});
+
+// ============ CARD 3D TILT ============
+document.addEventListener('mousemove',e=>{
+  document.querySelectorAll('.sc').forEach(card=>{
+    const rect=card.getBoundingClientRect();
+    const cx=rect.left+rect.width/2,cy=rect.top+rect.height/2;
+    const dx=(e.clientX-cx)/rect.width,dy=(e.clientY-cy)/rect.height;
+    const dist=Math.sqrt(dx*dx+dy*dy);
+    if(dist<1.2){
+      const ry=dx*12,rx=-dy*10;
+      card.style.transform=`perspective(600px) rotateY(${ry}deg) rotateX(${rx}deg) translateY(-4px)`;
+    } else {
+      card.style.transform='';
+    }
+  });
+});
+
+// ============ INIT ============
+function init(){
+  load();
+  setGreeting();
+  document.getElementById('avt').textContent=S.name[0].toUpperCase();
+  updStats();
+  setTimeout(initCharts,350);
+  setTimeout(updAnalytics,400);
+  setTimeout(updReports,500);
+}
+init();
+</script>
+</body>
+</html>
